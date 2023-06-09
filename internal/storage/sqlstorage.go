@@ -89,9 +89,9 @@ func (m *MartStorage) CreateUser(dto models.AuthDTO) (string, error) {
 		return ``, fmt.Errorf("cannot execute create request: %w", err)
 	}
 
-	var uuid string
-	row := m.conn.QueryRowContext(context.TODO(), checkUserExist, dto.Login)
-	err = row.Scan(&uuid)
+	var uuid, password string
+	row := m.conn.QueryRowContext(context.TODO(), getUser, dto.Login)
+	err = row.Scan(&uuid, &password)
 	if err != nil {
 		return ``, fmt.Errorf("cannot get created user id: %w", err)
 	}

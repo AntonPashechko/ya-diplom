@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/AntonPashechko/ya-diplom/internal/auth"
 	"github.com/AntonPashechko/ya-diplom/internal/compress"
 	"github.com/AntonPashechko/ya-diplom/internal/config"
 	"github.com/AntonPashechko/ya-diplom/internal/handlers"
@@ -30,9 +31,8 @@ type App struct {
 
 func Create(cfg *config.Config) (*App, error) {
 
-	if cfg.DataBaseDNS == `` {
-		return nil, fmt.Errorf("db dns is empty")
-	}
+	//Инициализируем объект для создания/проверки jwt
+	auth.Initialize(cfg)
 
 	storage, err := storage.NewMartStorage(cfg.DataBaseDNS)
 	if err != nil {

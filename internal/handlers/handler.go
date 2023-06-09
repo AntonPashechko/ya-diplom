@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/AntonPashechko/ya-diplom/internal/auth"
 	"github.com/AntonPashechko/ya-diplom/internal/logger"
 	"github.com/AntonPashechko/ya-diplom/internal/models"
 	"github.com/AntonPashechko/ya-diplom/internal/storage"
@@ -29,7 +30,7 @@ func (m *MartHandler) Register(r *chi.Mux) {
 		r.Post("/login", m.login)
 
 		r.Route("/orders", func(r chi.Router) {
-			//router.Use(jwt.Middleware)
+			r.Use(auth.Middleware)
 			r.Post("/", m.addOrder)
 			r.Get("/", m.getOrders)
 		})
@@ -72,11 +73,18 @@ func (m *MartHandler) userRegister(w http.ResponseWriter, r *http.Request) {
 	//Создаем пользователя, получаем идентификатор для токена
 	user_id, err := m.storage.CreateUser(authDTO)
 	if err != nil {
-		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("user with login %s already exist", authDTO.Login))
+		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot create new user: %s", err))
 		return
 	}
 
-	fmt.Println(user_id)
+	//Выпускаем токен, посылаем в заголовке ответа
+	jwt, err := auth.CreateToken(user_id)
+	if err != nil {
+		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot create jwt: %s", err))
+		return
+	}
+
+	w.Header().Set("Authorization", jwt)
 }
 
 func (m *MartHandler) login(w http.ResponseWriter, r *http.Request) {
@@ -90,11 +98,18 @@ func (m *MartHandler) login(w http.ResponseWriter, r *http.Request) {
 	//Провереяем корректность данных пользователя
 	user_id, err := m.storage.Login(authDTO)
 	if err != nil {
-		m.errorRespond(w, http.StatusUnauthorized, fmt.Errorf("authentication failed: %w", err))
+		m.errorRespond(w, http.StatusUnauthorized, fmt.Errorf("authentication failed: %s", err))
 		return
 	}
 
-	fmt.Println(user_id)
+	//Выпускаем токен, посылаем в заголовке ответа
+	jwt, err := auth.CreateToken(user_id)
+	if err != nil {
+		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot create jwt: %s", err))
+		return
+	}
+
+	w.Header().Set("Authorization", jwt)
 }
 
 func (m *MartHandler) addOrder(w http.ResponseWriter, r *http.Request) {
