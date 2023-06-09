@@ -6,7 +6,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// Тут мне не нравится инициализация синглтона, я бы использовал once.Do, если бы писал сам, но это я стырил с лекции и не стал переделывать
 var log *zap.Logger = zap.NewNop()
 
 func Initialize(level string) error {

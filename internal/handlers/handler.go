@@ -23,7 +23,9 @@ func NewMartHandler(storage *storage.MartStorage) MartHandler {
 func (m *MartHandler) Register(r *chi.Mux) {
 
 	r.Route("/api/user", func(r chi.Router) {
+		//Регистрация нового пользователя
 		r.Post("/register", m.userRegister)
+		//Аутентификация существующего пользователя
 		r.Post("/login", m.login)
 
 		r.Route("/orders", func(r chi.Router) {
@@ -85,7 +87,7 @@ func (m *MartHandler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//Создаем пользователя, получаем идентификатор для токена
+	//Провереяем корректность данных пользователя
 	user_id, err := m.storage.Login(authDTO)
 	if err != nil {
 		m.errorRespond(w, http.StatusUnauthorized, fmt.Errorf("authentication failed: %w", err))

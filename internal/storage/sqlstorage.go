@@ -59,7 +59,11 @@ func (m *MartStorage) applyDBMigrations(ctx context.Context) error {
 	}
 
 	// коммитим транзакцию
-	return tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("cannot comit transaction: %w", err)
+	}
+	return nil
 }
 
 func (m *MartStorage) Close() {
