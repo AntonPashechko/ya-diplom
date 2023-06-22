@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/AntonPashechko/ya-diplom/internal/auth"
@@ -10,6 +11,30 @@ import (
 	"github.com/AntonPashechko/ya-diplom/internal/storage"
 	"github.com/go-chi/chi/v5"
 )
+
+// Valid check number is valid or not based on Luhn algorithm
+func validLuhn(number int) bool {
+	return (number%10+checksum(number/10))%10 == 0
+}
+
+func checksum(number int) int {
+	var luhn int
+
+	for i := 0; number > 0; i++ {
+		cur := number % 10
+
+		if i%2 == 0 {
+			cur = cur * 2
+			if cur > 9 {
+				cur = cur%10 + cur/10
+			}
+		}
+
+		luhn += cur
+		number = number / 10
+	}
+	return luhn % 10
+}
 
 type MartHandler struct {
 	storage *storage.MartStorage
@@ -113,6 +138,16 @@ func (m *MartHandler) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *MartHandler) addOrder(w http.ResponseWriter, r *http.Request) {
+	//Прочитаем тело запроса
+	responseData, err := io.ReadAll(r.Body)
+	if err != nil {
+		m.errorRespond(w, http.StatusBadRequest, fmt.Errorf("cannot get request body: %s", err))
+		return
+	}
+
+	//Проверим, что там число
+	responseString := string(responseData)
+	fmt.Println(validLuhn(StrToInt64)
 }
 
 func (m *MartHandler) getOrders(w http.ResponseWriter, r *http.Request) {
