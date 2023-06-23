@@ -9,32 +9,9 @@ import (
 	"github.com/AntonPashechko/ya-diplom/internal/logger"
 	"github.com/AntonPashechko/ya-diplom/internal/models"
 	"github.com/AntonPashechko/ya-diplom/internal/storage"
+	"github.com/AntonPashechko/ya-diplom/pkg/utils"
 	"github.com/go-chi/chi/v5"
 )
-
-// Valid check number is valid or not based on Luhn algorithm
-func validLuhn(number int) bool {
-	return (number%10+checksum(number/10))%10 == 0
-}
-
-func checksum(number int) int {
-	var luhn int
-
-	for i := 0; number > 0; i++ {
-		cur := number % 10
-
-		if i%2 == 0 {
-			cur = cur * 2
-			if cur > 9 {
-				cur = cur%10 + cur/10
-			}
-		}
-
-		luhn += cur
-		number = number / 10
-	}
-	return luhn % 10
-}
 
 type MartHandler struct {
 	storage *storage.MartStorage
@@ -138,16 +115,56 @@ func (m *MartHandler) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *MartHandler) addOrder(w http.ResponseWriter, r *http.Request) {
+
 	//Прочитаем тело запроса
-	responseData, err := io.ReadAll(r.Body)
+	numberData, err := io.ReadAll(r.Body)
 	if err != nil {
 		m.errorRespond(w, http.StatusBadRequest, fmt.Errorf("cannot get request body: %s", err))
 		return
 	}
 
-	//Проверим, что там число
-	responseString := string(responseData)
-	fmt.Println(validLuhn(StrToInt64)
+	//Проверим, что там число и не пустая строка
+	orderNumber, err := utils.StrToInt64(string(numberData))
+	if err != nil || orderNumber == 0 {
+		m.errorRespond(w, http.StatusUnprocessableEntity, fmt.Errorf("bad order number: %s", err))
+		return
+	}
+
+	//Проверим по алгоритму Луна
+	if !utils.ValidLuhn(orderNumber) {
+		m.errorRespond(w, http.StatusUnprocessableEntity, fmt.Errorf("bad Luhn check"))
+		return
+	}
+
+	//Забираем id пользователя из контекста
+	curentUser := r.Context().Value("id").(string)
+
+	//Нужно проверить, что заказа с таким номером не существует
+	//А если есть - вернуть код, в зависимости от того, этого пользователя заказ или нет
+	//200 — номер заказа уже был загружен этим пользователем;
+	//409 — номер заказа уже был загружен другим пользователем;
+
+	user_id, err := m.storage.GetExistOrderUser(string(numberData))
+	if err != nil {
+		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot check number exist"))
+		return
+	}
+	if user_id != `` {
+		if user_id == curentUser {
+			return
+		} else {
+			m.errorRespond(w, http.StatusConflict, fmt.Errorf("other user have this order number"))
+			return
+		}
+	}
+
+	err = m.storage.NewOrder(string(numberData), curentUser)
+	if err != nil {
+		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot check number exist"))
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func (m *MartHandler) getOrders(w http.ResponseWriter, r *http.Request) {

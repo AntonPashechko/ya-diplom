@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/AntonPashechko/ya-diplom/internal/models"
@@ -11,7 +12,10 @@ import (
 const (
 	checkUserExist = "SELECT COUNT(*) FROM users WHERE login = $1"
 	createUser     = "INSERT INTO users (login, password) VALUES($1,$2)"
-	getUser        = "SELECT user_id, password FROM users WHERE login = $1"
+	getUser        = "SELECT id, password FROM users WHERE login = $1"
+
+	getOrderUserId = "SELECT user_id from orders WHERE number = $1"
+	createOrder    = "INSERT INTO orders (number, user_id) VALUES ($1,$2)"
 )
 
 type MartStorage struct {
@@ -48,14 +52,52 @@ func (m *MartStorage) applyDBMigrations(ctx context.Context) error {
 	// создаём таблицу для хранения пользователей
 	_, err = tx.ExecContext(ctx, `
         CREATE TABLE IF NOT EXISTS users (
-			user_id uuid DEFAULT uuid_generate_v4 (),
+			id uuid DEFAULT uuid_generate_v4 (),
 			login VARCHAR(255) UNIQUE NOT NULL,
 			password VARCHAR(255),
-			PRIMARY KEY (user_id)
+			PRIMARY KEY (id)
         )
     `)
 	if err != nil {
 		return fmt.Errorf("cannot create users table: %w", err)
+	}
+
+	// создаём таблицу для хранения статуса обработки заказа
+	_, err = tx.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS order_status (
+			id SERIAL,
+			status VARCHAR(32) UNIQUE NOT NULL,
+			PRIMARY KEY (id)
+			)
+    `)
+	if err != nil {
+		return fmt.Errorf("cannot create order_status table: %w", err)
+	}
+
+	//Заполним таблицу статусами
+	_, err = tx.ExecContext(ctx,
+		"INSERT INTO order_status (status) "+
+			"VALUES ('NEW'),('PROCESSING'),('INVALID'),('PROCESSED') "+
+			"ON CONFLICT (status) DO NOTHING")
+	if err != nil {
+		return fmt.Errorf("cannot sync order_status: %w", err)
+	}
+
+	// создаём таблицу для хранения номеров заказов
+	_, err = tx.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS orders (
+			number VARCHAR(255) UNIQUE NOT NULL,
+			user_id uuid,
+			status_id int DEFAULT 1,
+			accrual int DEFAULT 0,
+			uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (number),
+			FOREIGN KEY (user_id) REFERENCES users(id),
+			FOREIGN KEY (status_id) REFERENCES order_status(id)
+			)
+    `)
+	if err != nil {
+		return fmt.Errorf("cannot create orders table: %w", err)
 	}
 
 	// коммитим транзакцию
@@ -114,4 +156,29 @@ func (m *MartStorage) Login(dto models.AuthDTO) (string, error) {
 	}
 
 	return uuid, nil
+}
+
+func (m *MartStorage) GetExistOrderUser(number string) (string, error) {
+	var user_id string
+
+	row := m.conn.QueryRowContext(context.TODO(), getOrderUserId, number)
+	err := row.Scan(&user_id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ``, nil
+		}
+		return ``, fmt.Errorf("cannot check order exist: %w", err)
+	}
+
+	return user_id, nil
+}
+
+func (m *MartStorage) NewOrder(number string, user_id string) error {
+
+	_, err := m.conn.ExecContext(context.TODO(), createOrder, number, user_id)
+	if err != nil {
+		return fmt.Errorf("create execute create order: %w", err)
+	}
+
+	return nil
 }
