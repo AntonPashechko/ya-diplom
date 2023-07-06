@@ -16,6 +16,11 @@ const (
 
 	getOrderUserId = "SELECT user_id from orders WHERE number = $1"
 	createOrder    = "INSERT INTO orders (number, user_id) VALUES ($1,$2)"
+
+	getUserOrders = "SELECT o.number, os.status, o.accrual, o.uploaded_at from ORDERS o " +
+		"LEFT JOIN order_status os ON o.status_id = os.id " +
+		"WHERE user_id = $1 " +
+		"ORDER BY uploaded_at"
 )
 
 type MartStorage struct {
@@ -114,7 +119,7 @@ func (m *MartStorage) Close() {
 
 func (m *MartStorage) IsUserExist(login string) bool {
 	var count int
-	row := m.conn.QueryRowContext(context.TODO(), checkUserExist, login)
+	row := m.conn.QueryRowContext(context.Background(), checkUserExist, login)
 	row.Scan(&count)
 
 	return count > 0
@@ -126,13 +131,13 @@ func (m *MartStorage) CreateUser(dto models.AuthDTO) (string, error) {
 		return ``, fmt.Errorf("cannot generate password hash: %w", err)
 	}
 
-	_, err := m.conn.ExecContext(context.TODO(), createUser, dto.Login, dto.Password)
+	_, err := m.conn.ExecContext(context.Background(), createUser, dto.Login, dto.Password)
 	if err != nil {
 		return ``, fmt.Errorf("cannot execute create request: %w", err)
 	}
 
 	var uuid, password string
-	row := m.conn.QueryRowContext(context.TODO(), getUser, dto.Login)
+	row := m.conn.QueryRowContext(context.Background(), getUser, dto.Login)
 	err = row.Scan(&uuid, &password)
 	if err != nil {
 		return ``, fmt.Errorf("cannot get created user id: %w", err)
@@ -145,7 +150,7 @@ func (m *MartStorage) Login(dto models.AuthDTO) (string, error) {
 	var passwordHash string
 	var uuid string
 
-	row := m.conn.QueryRowContext(context.TODO(), getUser, dto.Login)
+	row := m.conn.QueryRowContext(context.Background(), getUser, dto.Login)
 	err := row.Scan(&uuid, &passwordHash)
 	if err != nil {
 		return ``, fmt.Errorf("cannot get user: %w", err)
@@ -161,7 +166,7 @@ func (m *MartStorage) Login(dto models.AuthDTO) (string, error) {
 func (m *MartStorage) GetExistOrderUser(number string) (string, error) {
 	var user_id string
 
-	row := m.conn.QueryRowContext(context.TODO(), getOrderUserId, number)
+	row := m.conn.QueryRowContext(context.Background(), getOrderUserId, number)
 	err := row.Scan(&user_id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -175,10 +180,36 @@ func (m *MartStorage) GetExistOrderUser(number string) (string, error) {
 
 func (m *MartStorage) NewOrder(number string, user_id string) error {
 
-	_, err := m.conn.ExecContext(context.TODO(), createOrder, number, user_id)
+	_, err := m.conn.ExecContext(context.Background(), createOrder, number, user_id)
 	if err != nil {
-		return fmt.Errorf("create execute create order: %w", err)
+		return fmt.Errorf("cannot execute create order: %w", err)
 	}
 
 	return nil
+}
+
+func (m *MartStorage) GetUserOrders(user_id string) ([]models.OrderDTO, error) {
+	orders := make([]models.OrderDTO, 0)
+
+	rows, err := m.conn.QueryContext(context.Background(), getUserOrders, user_id)
+	if err != nil {
+		return nil, fmt.Errorf("cannot query orders: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var order models.OrderDTO
+		err = rows.Scan(&order.Number, &order.Status, &order.Accrual, &order.UploadedAt)
+		if err != nil {
+			return nil, fmt.Errorf("cannot scan order row: %w", err)
+		}
+
+		orders = append(orders, order)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf("query orders rows contains error: %w", err)
+	}
+	return orders, nil
 }

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -137,7 +138,7 @@ func (m *MartHandler) addOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//Забираем id пользователя из контекста
-	curentUser := r.Context().Value("id").(string)
+	currentUser := r.Context().Value("id").(string)
 
 	//Нужно проверить, что заказа с таким номером не существует
 	//А если есть - вернуть код, в зависимости от того, этого пользователя заказ или нет
@@ -146,11 +147,11 @@ func (m *MartHandler) addOrder(w http.ResponseWriter, r *http.Request) {
 
 	user_id, err := m.storage.GetExistOrderUser(string(numberData))
 	if err != nil {
-		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot check number exist"))
+		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot check number exist: %s", err))
 		return
 	}
 	if user_id != `` {
-		if user_id == curentUser {
+		if user_id == currentUser {
 			return
 		} else {
 			m.errorRespond(w, http.StatusConflict, fmt.Errorf("other user have this order number"))
@@ -158,9 +159,9 @@ func (m *MartHandler) addOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = m.storage.NewOrder(string(numberData), curentUser)
+	err = m.storage.NewOrder(string(numberData), currentUser)
 	if err != nil {
-		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot check number exist"))
+		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot create order exist: %s", err))
 		return
 	}
 
@@ -168,6 +169,23 @@ func (m *MartHandler) addOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *MartHandler) getOrders(w http.ResponseWriter, r *http.Request) {
+	//Забираем id пользователя из контекста
+	currentUser := r.Context().Value("id").(string)
+
+	orders, err := m.storage.GetUserOrders(currentUser)
+	if err != nil {
+		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot get user orders: %s", err))
+		return
+	}
+
+	if len(orders) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(orders); err != nil {
+		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("error encoding response: %s", err))
+	}
 }
 
 func (m *MartHandler) getBalance(w http.ResponseWriter, r *http.Request) {
