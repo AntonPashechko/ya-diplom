@@ -23,6 +23,9 @@ const (
 		"ORDER BY uploaded_at"
 )
 
+// ErrNotEnoughFunds not enough funds in the account
+var ErrNotEnoughFunds = errors.New("not enough funds in the account")
+
 type MartStorage struct {
 	conn *sql.DB
 }
@@ -94,7 +97,7 @@ func (m *MartStorage) applyDBMigrations(ctx context.Context) error {
 			number VARCHAR(255) UNIQUE NOT NULL,
 			user_id uuid,
 			status_id int DEFAULT 1,
-			accrual int DEFAULT 0,
+			accrual double precision DEFAULT 0,
 			uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (number),
 			FOREIGN KEY (user_id) REFERENCES users(id),
@@ -103,6 +106,21 @@ func (m *MartStorage) applyDBMigrations(ctx context.Context) error {
     `)
 	if err != nil {
 		return fmt.Errorf("cannot create orders table: %w", err)
+	}
+
+	// создаём таблицу для хранения списаний
+	_, err = tx.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS withdrawals (
+			number VARCHAR(255) UNIQUE NOT NULL,
+			user_id uuid,
+			sum double precision,
+			uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (number),
+			FOREIGN KEY (user_id) REFERENCES users(id)
+			)
+    `)
+	if err != nil {
+		return fmt.Errorf("cannot create withdrawals table: %w", err)
 	}
 
 	// коммитим транзакцию
@@ -212,4 +230,10 @@ func (m *MartStorage) GetUserOrders(user_id string) ([]models.OrderDTO, error) {
 		return nil, fmt.Errorf("query orders rows contains error: %w", err)
 	}
 	return orders, nil
+}
+
+func (m *MartStorage) AddWithdraw(dto models.WithdrawDTO, user_id string) error {
+
+	//TODO здесь надо безопасно проверять что хватает средств
+	return ErrNotEnoughFunds
 }

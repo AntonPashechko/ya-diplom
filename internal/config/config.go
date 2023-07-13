@@ -20,7 +20,7 @@ func Create() (*Config, error) {
 	cfg := &Config{}
 
 	var JWT_key, JWT_duration string
-	/*Разбираем командную строку сперва в структуру только со string полями*/
+
 	flag.StringVar(&cfg.Endpoint, "a", "localhost:8080", "address and port to run server")
 	flag.StringVar(&cfg.DataBaseDNS, "d", "", "db dns")
 	flag.StringVar(&JWT_key, "k", "aL6HmkWp7D", "JWT key")

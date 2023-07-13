@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -39,13 +40,13 @@ func (m *MartHandler) Register(r *chi.Mux) {
 		})
 
 		r.Route("/balance", func(r chi.Router) {
-			//router.Use(jwt.Middleware)
+			r.Use(auth.Middleware)
 			r.Get("/", m.getBalance)
 			r.Post("/withdraw", m.addWithdraw)
 		})
 
 		r.Route("/withdrawals", func(r chi.Router) {
-			//router.Use(jwt.Middleware)
+			r.Use(auth.Middleware)
 			r.Get("/", m.getWithdraws)
 		})
 	})
@@ -161,7 +162,7 @@ func (m *MartHandler) addOrder(w http.ResponseWriter, r *http.Request) {
 
 	err = m.storage.NewOrder(string(numberData), currentUser)
 	if err != nil {
-		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot create order exist: %s", err))
+		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot create new order: %s", err))
 		return
 	}
 
@@ -189,9 +190,43 @@ func (m *MartHandler) getOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *MartHandler) getBalance(w http.ResponseWriter, r *http.Request) {
+
 }
 
 func (m *MartHandler) addWithdraw(w http.ResponseWriter, r *http.Request) {
+
+	//Разобрали запрос
+	dto, err := models.NewDTO[models.WithdrawDTO](r.Body)
+	if err != nil {
+		m.errorRespond(w, http.StatusBadRequest, fmt.Errorf("cannot decode withdraw dto: %s", err))
+		return
+	}
+
+	//Проверим, что там число и не пустая строка
+	orderNumber, err := utils.StrToInt64(string(dto.Order))
+	if err != nil || orderNumber == 0 {
+		m.errorRespond(w, http.StatusUnprocessableEntity, fmt.Errorf("bad order number: %s", err))
+		return
+	}
+
+	//Проверим по алгоритму Луна
+	if !utils.ValidLuhn(orderNumber) {
+		m.errorRespond(w, http.StatusUnprocessableEntity, fmt.Errorf("bad Luhn check"))
+		return
+	}
+
+	//Забираем id пользователя из контекста
+	currentUser := r.Context().Value("id").(string)
+
+	err = m.storage.AddWithdraw(dto, currentUser)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotEnoughFunds) {
+			m.errorRespond(w, http.StatusPaymentRequired, err)
+			return
+		}
+		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot create new withdraw: %s", err))
+		return
+	}
 }
 
 func (m *MartHandler) getWithdraws(w http.ResponseWriter, r *http.Request) {
