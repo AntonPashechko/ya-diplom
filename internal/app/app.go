@@ -12,6 +12,7 @@ import (
 	"github.com/AntonPashechko/ya-diplom/internal/auth"
 	"github.com/AntonPashechko/ya-diplom/internal/compress"
 	"github.com/AntonPashechko/ya-diplom/internal/config"
+	"github.com/AntonPashechko/ya-diplom/internal/deadline"
 	"github.com/AntonPashechko/ya-diplom/internal/handlers"
 	"github.com/AntonPashechko/ya-diplom/internal/logger"
 	"github.com/AntonPashechko/ya-diplom/internal/storage"
@@ -45,6 +46,8 @@ func Create(cfg *config.Config) (*App, error) {
 	router.Use(logger.Middleware)
 	//Подключаем middleware декомпрессии
 	router.Use(compress.Middleware)
+	//Подключаем middleware deadline context
+	router.Use(deadline.Middleware)
 
 	martHandler := handlers.NewMartHandler(storage)
 	martHandler.Register(router)

@@ -135,27 +135,27 @@ func (m *MartStorage) Close() {
 	m.conn.Close()
 }
 
-func (m *MartStorage) IsUserExist(login string) bool {
+func (m *MartStorage) IsUserExist(ctx context.Context, login string) bool {
 	var count int
-	row := m.conn.QueryRowContext(context.Background(), checkUserExist, login)
+	row := m.conn.QueryRowContext(ctx, checkUserExist, login)
 	row.Scan(&count)
 
 	return count > 0
 }
 
-func (m *MartStorage) CreateUser(dto models.AuthDTO) (string, error) {
+func (m *MartStorage) CreateUser(ctx context.Context, dto models.AuthDTO) (string, error) {
 
 	if err := dto.GeneratePasswordHash(); err != nil {
 		return ``, fmt.Errorf("cannot generate password hash: %w", err)
 	}
 
-	_, err := m.conn.ExecContext(context.Background(), createUser, dto.Login, dto.Password)
+	_, err := m.conn.ExecContext(ctx, createUser, dto.Login, dto.Password)
 	if err != nil {
 		return ``, fmt.Errorf("cannot execute create request: %w", err)
 	}
 
 	var uuid, password string
-	row := m.conn.QueryRowContext(context.Background(), getUser, dto.Login)
+	row := m.conn.QueryRowContext(ctx, getUser, dto.Login)
 	err = row.Scan(&uuid, &password)
 	if err != nil {
 		return ``, fmt.Errorf("cannot get created user id: %w", err)
@@ -164,11 +164,11 @@ func (m *MartStorage) CreateUser(dto models.AuthDTO) (string, error) {
 	return uuid, nil
 }
 
-func (m *MartStorage) Login(dto models.AuthDTO) (string, error) {
+func (m *MartStorage) Login(ctx context.Context, dto models.AuthDTO) (string, error) {
 	var passwordHash string
 	var uuid string
 
-	row := m.conn.QueryRowContext(context.Background(), getUser, dto.Login)
+	row := m.conn.QueryRowContext(ctx, getUser, dto.Login)
 	err := row.Scan(&uuid, &passwordHash)
 	if err != nil {
 		return ``, fmt.Errorf("cannot get user: %w", err)
@@ -181,10 +181,10 @@ func (m *MartStorage) Login(dto models.AuthDTO) (string, error) {
 	return uuid, nil
 }
 
-func (m *MartStorage) GetExistOrderUser(number string) (string, error) {
+func (m *MartStorage) GetExistOrderUser(ctx context.Context, number string) (string, error) {
 	var user_id string
 
-	row := m.conn.QueryRowContext(context.Background(), getOrderUserId, number)
+	row := m.conn.QueryRowContext(ctx, getOrderUserId, number)
 	err := row.Scan(&user_id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -196,9 +196,9 @@ func (m *MartStorage) GetExistOrderUser(number string) (string, error) {
 	return user_id, nil
 }
 
-func (m *MartStorage) NewOrder(number string, user_id string) error {
+func (m *MartStorage) NewOrder(ctx context.Context, number string, user_id string) error {
 
-	_, err := m.conn.ExecContext(context.Background(), createOrder, number, user_id)
+	_, err := m.conn.ExecContext(ctx, createOrder, number, user_id)
 	if err != nil {
 		return fmt.Errorf("cannot execute create order: %w", err)
 	}
@@ -206,10 +206,10 @@ func (m *MartStorage) NewOrder(number string, user_id string) error {
 	return nil
 }
 
-func (m *MartStorage) GetUserOrders(user_id string) ([]models.OrderDTO, error) {
+func (m *MartStorage) GetUserOrders(ctx context.Context, user_id string) ([]models.OrderDTO, error) {
 	orders := make([]models.OrderDTO, 0)
 
-	rows, err := m.conn.QueryContext(context.Background(), getUserOrders, user_id)
+	rows, err := m.conn.QueryContext(ctx, getUserOrders, user_id)
 	if err != nil {
 		return nil, fmt.Errorf("cannot query orders: %w", err)
 	}
@@ -232,7 +232,7 @@ func (m *MartStorage) GetUserOrders(user_id string) ([]models.OrderDTO, error) {
 	return orders, nil
 }
 
-func (m *MartStorage) AddWithdraw(dto models.WithdrawDTO, user_id string) error {
+func (m *MartStorage) AddWithdraw(ctx context.Context, dto models.WithdrawDTO, user_id string) error {
 
 	//TODO здесь надо безопасно проверять что хватает средств
 	return ErrNotEnoughFunds

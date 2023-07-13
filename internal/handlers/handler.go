@@ -58,6 +58,7 @@ func (m *MartHandler) errorRespond(w http.ResponseWriter, code int, err error) {
 }
 
 func (m *MartHandler) userRegister(w http.ResponseWriter, r *http.Request) {
+
 	//Разобрали запрос
 	authDTO, err := models.NewDTO[models.AuthDTO](r.Body)
 	if err != nil {
@@ -70,12 +71,12 @@ func (m *MartHandler) userRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//Проверяем, что пользака с таким логином нет
-	if m.storage.IsUserExist(authDTO.Login) {
+	if m.storage.IsUserExist(r.Context(), authDTO.Login) {
 		m.errorRespond(w, http.StatusConflict, fmt.Errorf("user with login %s already exist", authDTO.Login))
 		return
 	}
 	//Создаем пользователя, получаем идентификатор для токена
-	user_id, err := m.storage.CreateUser(authDTO)
+	user_id, err := m.storage.CreateUser(r.Context(), authDTO)
 	if err != nil {
 		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot create new user: %s", err))
 		return
@@ -100,7 +101,7 @@ func (m *MartHandler) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//Провереяем корректность данных пользователя
-	user_id, err := m.storage.Login(authDTO)
+	user_id, err := m.storage.Login(r.Context(), authDTO)
 	if err != nil {
 		m.errorRespond(w, http.StatusUnauthorized, fmt.Errorf("authentication failed: %s", err))
 		return
@@ -146,7 +147,7 @@ func (m *MartHandler) addOrder(w http.ResponseWriter, r *http.Request) {
 	//200 — номер заказа уже был загружен этим пользователем;
 	//409 — номер заказа уже был загружен другим пользователем;
 
-	user_id, err := m.storage.GetExistOrderUser(string(numberData))
+	user_id, err := m.storage.GetExistOrderUser(r.Context(), string(numberData))
 	if err != nil {
 		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot check number exist: %s", err))
 		return
@@ -160,7 +161,7 @@ func (m *MartHandler) addOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = m.storage.NewOrder(string(numberData), currentUser)
+	err = m.storage.NewOrder(r.Context(), string(numberData), currentUser)
 	if err != nil {
 		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot create new order: %s", err))
 		return
@@ -173,7 +174,7 @@ func (m *MartHandler) getOrders(w http.ResponseWriter, r *http.Request) {
 	//Забираем id пользователя из контекста
 	currentUser := r.Context().Value("id").(string)
 
-	orders, err := m.storage.GetUserOrders(currentUser)
+	orders, err := m.storage.GetUserOrders(r.Context(), currentUser)
 	if err != nil {
 		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot get user orders: %s", err))
 		return
@@ -184,6 +185,7 @@ func (m *MartHandler) getOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(orders); err != nil {
 		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("error encoding response: %s", err))
 	}
@@ -218,7 +220,7 @@ func (m *MartHandler) addWithdraw(w http.ResponseWriter, r *http.Request) {
 	//Забираем id пользователя из контекста
 	currentUser := r.Context().Value("id").(string)
 
-	err = m.storage.AddWithdraw(dto, currentUser)
+	err = m.storage.AddWithdraw(r.Context(), dto, currentUser)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotEnoughFunds) {
 			m.errorRespond(w, http.StatusPaymentRequired, err)
