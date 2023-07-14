@@ -27,7 +27,7 @@ func Middleware(h http.Handler) http.Handler {
 			return
 		}
 
-		id, err := VerifyToken(splitted[1])
+		id, err := verifyToken(splitted[1])
 		if err != nil {
 			logger.Error("cannot verify jwt: %s", err)
 			w.WriteHeader(http.StatusUnauthorized)
@@ -35,7 +35,7 @@ func Middleware(h http.Handler) http.Handler {
 		}
 
 		//Добавляем id пользователя в Context запроса
-		ctx := context.WithValue(r.Context(), "id", id)
+		ctx := context.WithValue(r.Context(), "user", id)
 		h.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

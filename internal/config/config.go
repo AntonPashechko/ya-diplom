@@ -10,21 +10,23 @@ import (
 )
 
 type Config struct {
-	Endpoint     string
-	DataBaseDNS  string
-	JWT_key      []byte        //Ключ для создания/проверки jwt для авторизации
-	JWT_duration time.Duration //Время действия jwt для авторизации
+	Endpoint       string
+	DataBaseDNS    string
+	AccrualAddress string
+	JWTKey         []byte        //Ключ для создания/проверки jwt для авторизации
+	JWTDuration    time.Duration //Время действия jwt для авторизации
 }
 
 func Create() (*Config, error) {
 	cfg := &Config{}
 
-	var JWT_key, JWT_duration string
+	var JWTKey, JWTDuration string
 
-	flag.StringVar(&cfg.Endpoint, "a", "localhost:8080", "address and port to run server")
+	flag.StringVar(&cfg.Endpoint, "a", "localhost:8081", "address and port to run server")
 	flag.StringVar(&cfg.DataBaseDNS, "d", "", "db dns")
-	flag.StringVar(&JWT_key, "k", "aL6HmkWp7D", "JWT key")
-	flag.StringVar(&JWT_duration, "t", "60m", "JWT duration")
+	flag.StringVar(&cfg.AccrualAddress, "r", "localhost:8080", "accrual address")
+	flag.StringVar(&JWTKey, "k", "aL6HmkWp7D", "JWT key")
+	flag.StringVar(&JWTDuration, "t", "60m", "JWT duration")
 
 	flag.Parse()
 
@@ -42,19 +44,28 @@ func Create() (*Config, error) {
 		return nil, fmt.Errorf("db dns is empty")
 	}
 
-	if key, exist := os.LookupEnv("JWT_KEY"); exist {
-		JWT_key = key
+	if accrual, exist := os.LookupEnv("ACCRUAL_SYSTEM_ADDRESS"); exist {
+		logger.Info("ACCRUAL_SYSTEM_ADDRESS env: %s", accrual)
+		cfg.AccrualAddress = accrual
 	}
 
-	if duration, exist := os.LookupEnv("JWT_DURATION"); exist {
-		JWT_duration = duration
+	if cfg.AccrualAddress == `` {
+		return nil, fmt.Errorf("accrual address is empty")
 	}
 
-	cfg.JWT_key = []byte(JWT_key)
-	if duration, err := time.ParseDuration(JWT_duration); err != nil {
+	if key, exist := os.LookupEnv("JWTKey"); exist {
+		JWTKey = key
+	}
+
+	if duration, exist := os.LookupEnv("JWTDuration"); exist {
+		JWTDuration = duration
+	}
+
+	cfg.JWTKey = []byte(JWTKey)
+	if duration, err := time.ParseDuration(JWTDuration); err != nil {
 		return nil, fmt.Errorf("JWT DURATION: %w", err)
 	} else {
-		cfg.JWT_duration = duration
+		cfg.JWTDuration = duration
 	}
 
 	return cfg, nil

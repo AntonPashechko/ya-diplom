@@ -22,22 +22,22 @@ func (m *AuthDTO) Validate() error {
 	return nil
 }
 
-func (u *AuthDTO) CheckPassword(passwordHash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(u.Password))
+func (m *AuthDTO) CheckPassword(passwordHash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(m.Password))
 	return err == nil
 }
 
-func (u *AuthDTO) GeneratePasswordHash() error {
+func (m *AuthDTO) GeneratePasswordHash() error {
 
-	if u.Password == "" {
+	if m.Password == "" {
 		return fmt.Errorf("password required")
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.MinCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(m.Password), bcrypt.MinCost)
 	if err != nil {
 		return fmt.Errorf("failed to hash password due to error %w", err)
 	}
 
-	u.Password = string(hash)
+	m.Password = string(hash)
 	return nil
 }

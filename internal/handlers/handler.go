@@ -140,7 +140,7 @@ func (m *MartHandler) addOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//Забираем id пользователя из контекста
-	currentUser := r.Context().Value("id").(string)
+	currentUser := r.Context().Value("user").(string)
 
 	//Нужно проверить, что заказа с таким номером не существует
 	//А если есть - вернуть код, в зависимости от того, этого пользователя заказ или нет
@@ -172,7 +172,7 @@ func (m *MartHandler) addOrder(w http.ResponseWriter, r *http.Request) {
 
 func (m *MartHandler) getOrders(w http.ResponseWriter, r *http.Request) {
 	//Забираем id пользователя из контекста
-	currentUser := r.Context().Value("id").(string)
+	currentUser := r.Context().Value("user").(string)
 
 	orders, err := m.storage.GetUserOrders(r.Context(), currentUser)
 	if err != nil {
@@ -193,6 +193,20 @@ func (m *MartHandler) getOrders(w http.ResponseWriter, r *http.Request) {
 
 func (m *MartHandler) getBalance(w http.ResponseWriter, r *http.Request) {
 
+	//Забираем id пользователя из контекста
+	currentUser := r.Context().Value("user").(string)
+
+	//Получаем текущий баланс пользователя
+	balance, err := m.storage.GetUserBalance(r.Context(), currentUser)
+	if err != nil {
+		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot get user balance: %s", err))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(balance); err != nil {
+		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("error encoding response: %s", err))
+	}
 }
 
 func (m *MartHandler) addWithdraw(w http.ResponseWriter, r *http.Request) {
@@ -218,7 +232,7 @@ func (m *MartHandler) addWithdraw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//Забираем id пользователя из контекста
-	currentUser := r.Context().Value("id").(string)
+	currentUser := r.Context().Value("user").(string)
 
 	err = m.storage.AddWithdraw(r.Context(), dto, currentUser)
 	if err != nil {
@@ -232,4 +246,22 @@ func (m *MartHandler) addWithdraw(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *MartHandler) getWithdraws(w http.ResponseWriter, r *http.Request) {
+	//Забираем id пользователя из контекста
+	currentUser := r.Context().Value("user").(string)
+
+	withdraws, err := m.storage.GetUserWithdraws(r.Context(), currentUser)
+	if err != nil {
+		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("cannot get user withdraws: %s", err))
+		return
+	}
+
+	if len(withdraws) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(withdraws); err != nil {
+		m.errorRespond(w, http.StatusInternalServerError, fmt.Errorf("error encoding response: %s", err))
+	}
 }
