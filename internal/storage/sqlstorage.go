@@ -10,12 +10,12 @@ import (
 )
 
 const (
-	checkUserExist = "SELECT COUNT(*) FROM users WHERE login = $1"
-	createUser     = "INSERT INTO users (login, password) VALUES($1,$2)"
-	getUser        = "SELECT id, password FROM users WHERE login = $1"
+	checkUserExist = `SELECT COUNT(*) FROM users WHERE login = $1`
+	createUser     = `INSERT INTO users (login, password) VALUES($1,$2)`
+	getUser        = `SELECT id, password FROM users WHERE login = $1`
 
-	getOrderUserID = "SELECT user_id FROM orders WHERE number = $1"
-	createOrder    = "INSERT INTO orders (number, user_id) VALUES ($1,$2)"
+	getOrderUserID = `SELECT user_id FROM orders WHERE number = $1`
+	createOrder    = `INSERT INTO orders (number, user_id) VALUES ($1,$2)`
 
 	getUserOrders = `SELECT o.number, 
 			os.status, 
@@ -33,6 +33,10 @@ const (
 		FROM withdrawals
 		WHERE user_id = $1
 		ORDER BY uploaded_at`
+
+	selectUserForUpdate = `SELECT id FROM users WHERE id = $1 for update`
+
+	createWithdraw = `INSERT INTO withdrawals (number, user_id, sum) VALUES ($1,$2,$3)`
 )
 
 // ErrNotEnoughFunds not enough funds in the account
@@ -291,6 +295,52 @@ func (m *MartStorage) GetUserBalance(ctx context.Context, userID string) (*model
 
 func (m *MartStorage) AddWithdraw(ctx context.Context, dto models.WithdrawDTO, userID string) error {
 
-	//TODO здесь надо безопасно проверять что хватает средств
-	return ErrNotEnoughFunds
+	//здесь надо безопасно проверять что хватает средств
+	// запускаем транзакцию
+	tx, err := m.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("cannot begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	//Блокируем пользователя
+	var user string
+	rowUser := tx.QueryRowContext(ctx, selectUserForUpdate, userID)
+	err = rowUser.Scan(&user)
+	if err != nil {
+		return fmt.Errorf("cannot lock user: %w", err)
+	}
+
+	//Проверяем достаточность средств
+	var accruals float64
+	var withdrawals float64
+
+	row := tx.QueryRowContext(ctx, getUserSumAccruals, userID)
+	err = row.Scan(&accruals)
+	if err != nil {
+		return fmt.Errorf("cannot get user sum accrual: %w", err)
+	}
+
+	row = tx.QueryRowContext(ctx, getUserSumWithdrawals, userID)
+	err = row.Scan(&withdrawals)
+	if err != nil {
+		return fmt.Errorf("cannot get user sum withdrawals: %w", err)
+	}
+
+	if (accruals - withdrawals) < dto.Sum {
+		return ErrNotEnoughFunds
+	}
+
+	_, err = tx.ExecContext(ctx, createWithdraw, dto.Order, userID, dto.Sum)
+	if err != nil {
+		return fmt.Errorf("cannot execute create order: %w", err)
+	}
+
+	// завершаем транзакцию
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("cannot commit the transaction: %w", err)
+	}
+
+	return nil
 }
