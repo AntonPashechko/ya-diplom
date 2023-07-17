@@ -26,19 +26,13 @@ const (
 
 type App struct {
 	server     *http.Server
-	storage    *storage.MartStorage
 	notifyStop context.CancelFunc
 }
 
-func Create(cfg *config.Config) (*App, error) {
+func Create(cfg *config.Config, storage *storage.MartStorage) (*App, error) {
 
 	//Инициализируем объект для создания/проверки jwt
 	auth.Initialize(cfg)
-
-	storage, err := storage.NewMartStorage(cfg.DataBaseDNS)
-	if err != nil {
-		return nil, fmt.Errorf("cannot create db store: %w", err)
-	}
 
 	//Наш роутер, регистрируем хэндлеры
 	router := chi.NewRouter()
@@ -57,7 +51,6 @@ func Create(cfg *config.Config) (*App, error) {
 			Addr:    cfg.Endpoint,
 			Handler: router,
 		},
-		storage: storage,
 	}, nil
 }
 
@@ -75,7 +68,6 @@ func (m *App) ServerDone() <-chan struct{} {
 
 func (m *App) Shutdown() error {
 	defer m.notifyStop()
-	defer m.storage.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTime)
 	defer cancel()

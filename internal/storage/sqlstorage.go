@@ -37,6 +37,16 @@ const (
 	selectUserForUpdate = `SELECT id FROM users WHERE id = $1 for update`
 
 	createWithdraw = `INSERT INTO withdrawals (number, user_id, sum) VALUES ($1,$2,$3)`
+
+	getOrdersForAccrual = `SELECT number 
+		FROM orders o 
+			LEFT JOIN order_status os ON o.status_id = os.id
+		WHERE os.status = 'NEW' OR os.status = 'PROCESSING'`
+
+	updateOrderAccrual = `UPDATE orders 
+		SET status_id = (select id from order_status where status = $1), 
+		accrual = $2
+    	WHERE number = $3`
 )
 
 // ErrNotEnoughFunds not enough funds in the account
@@ -340,6 +350,43 @@ func (m *MartStorage) AddWithdraw(ctx context.Context, dto models.WithdrawDTO, u
 	err = tx.Commit()
 	if err != nil {
 		return fmt.Errorf("cannot commit the transaction: %w", err)
+	}
+
+	return nil
+}
+
+// Получения заказов для расчета бонусов в accrual
+func (m *MartStorage) GetOrdersForCheck(ctx context.Context) ([]string, error) {
+	orderNumbers := make([]string, 0)
+
+	rows, err := m.conn.QueryContext(ctx, getOrdersForAccrual)
+	if err != nil {
+		return nil, fmt.Errorf("cannot query orders for accrual check: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var number string
+		err = rows.Scan(&number)
+		if err != nil {
+			return nil, fmt.Errorf("cannot scan number: %w", err)
+		}
+
+		orderNumbers = append(orderNumbers, number)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf("query orders for accrual check rows contains error: %w", err)
+	}
+	return orderNumbers, nil
+}
+
+func (m *MartStorage) UpdateOrderAccrual(ctx context.Context, number string, accrual *models.AccrualDTO) error {
+
+	_, err := m.conn.ExecContext(ctx, updateOrderAccrual, accrual.Status, accrual.Accrual, number)
+	if err != nil {
+		return fmt.Errorf("cannot exec update order accrual: %w", err)
 	}
 
 	return nil
