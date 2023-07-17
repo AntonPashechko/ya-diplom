@@ -34,7 +34,7 @@ func NewAccrualChecker(cfg *config.Config, storage *storage.MartStorage) *accrua
 	}
 }
 
-func (m *accrualChecker) createUrl(number string) string {
+func (m *accrualChecker) createURL(number string) string {
 	return strings.Join([]string{m.endpoint, accrualSubURL, number}, "")
 }
 
@@ -79,7 +79,7 @@ func (m *accrualChecker) getAccrualInfo(number string) *models.AccrualDTO {
 
 	resp, err := m.client.R().
 		SetResult(dto).
-		Get(m.createUrl(number))
+		Get(m.createURL(number))
 
 	if err != nil {
 		logger.Error("cannot get accrual for number %s: %s", number, err)

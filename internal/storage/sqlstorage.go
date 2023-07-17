@@ -29,10 +29,10 @@ const (
 	getUserSumAccruals    = `SELECT coalesce(SUM(accrual), 0.00) from orders WHERE user_id = $1`
 	getUserSumWithdrawals = `SELECT coalesce(SUM(sum), 0.00) from withdrawals WHERE user_id = $1`
 
-	getUserWithdrawls = `SELECT number, sum, processed_at, 
+	getUserWithdrawls = `SELECT number, sum, processed_at 
 		FROM withdrawals
 		WHERE user_id = $1
-		ORDER BY uploaded_at`
+		ORDER BY processed_at`
 
 	selectUserForUpdate = `SELECT id FROM users WHERE id = $1 for update`
 
