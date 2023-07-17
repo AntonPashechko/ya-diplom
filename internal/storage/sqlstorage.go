@@ -286,18 +286,24 @@ func (m *MartStorage) GetUserWithdraws(ctx context.Context, userID string) ([]mo
 
 func (m *MartStorage) GetUserBalance(ctx context.Context, userID string) (*models.BalanceDTO, error) {
 
-	balance := &models.BalanceDTO{}
+	var orderSum float64
+	var withdrawalSum float64
 
 	row := m.conn.QueryRowContext(ctx, getUserSumAccruals, userID)
-	err := row.Scan(&balance.Current)
+	err := row.Scan(&orderSum)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get user sum accrual: %w", err)
 	}
 
 	row = m.conn.QueryRowContext(ctx, getUserSumWithdrawals, userID)
-	err = row.Scan(&balance.Withdrawn)
+	err = row.Scan(&withdrawalSum)
 	if err != nil {
 		return nil, fmt.Errorf("cannot get user sum withdrawals: %w", err)
+	}
+
+	balance := &models.BalanceDTO{
+		Current:   orderSum - withdrawalSum,
+		Withdrawn: withdrawalSum,
 	}
 
 	return balance, nil
