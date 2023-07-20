@@ -327,23 +327,13 @@ func (m *MartStorage) AddWithdraw(ctx context.Context, dto models.WithdrawDTO, u
 		return fmt.Errorf("cannot lock user: %w", err)
 	}
 
-	//Проверяем достаточность средств
-	var accruals float64
-	var withdrawals float64
-
-	row := tx.QueryRowContext(ctx, getUserSumAccruals, userID)
-	err = row.Scan(&accruals)
+	//Получаем баланс пользователя. Используем метод для /api/user/balance
+	balance, err := m.GetUserBalance(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("cannot get user sum accrual: %w", err)
+		return fmt.Errorf("cannot get user balance: %w", err)
 	}
 
-	row = tx.QueryRowContext(ctx, getUserSumWithdrawals, userID)
-	err = row.Scan(&withdrawals)
-	if err != nil {
-		return fmt.Errorf("cannot get user sum withdrawals: %w", err)
-	}
-
-	if (accruals - withdrawals) < dto.Sum {
+	if balance.Current < dto.Sum {
 		return ErrNotEnoughFunds
 	}
 
