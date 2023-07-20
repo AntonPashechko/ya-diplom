@@ -60,11 +60,11 @@ func Create() (*Config, error) {
 		cfg.AccrualAddress = "http://" + cfg.AccrualAddress
 	}
 
-	if key, exist := os.LookupEnv("JWTKey"); exist {
+	if key, exist := os.LookupEnv("JWT_KEY"); exist {
 		JWTKey = key
 	}
 
-	if duration, exist := os.LookupEnv("JWTDuration"); exist {
+	if duration, exist := os.LookupEnv("JWT_DURATION"); exist {
 		JWTDuration = duration
 	}
 

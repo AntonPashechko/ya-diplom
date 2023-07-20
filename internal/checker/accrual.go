@@ -2,6 +2,7 @@ package checker
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -49,23 +50,29 @@ func (m *accrualChecker) Work(ctx context.Context) {
 			return
 		//Обновляем статус заказов
 		case <-ticker.C:
-			m.checkOrders()
+			m.checkOrders(ctx)
 		}
 	}
 }
 
-func (m *accrualChecker) checkOrders() {
+func (m *accrualChecker) checkOrders(ctx context.Context) {
 	//Получим все заказы, у которых статус проверки не завершен
-	numbers, err := m.storage.GetOrdersForCheck(context.Background())
+	numbers, err := m.storage.GetOrdersForCheck(ctx)
 	if err != nil {
 		logger.Error("cannot get orders for check: %s", err)
+		return
 	}
 
 	//Для каждого заказа - проверим статус в accrual и обновим его в базе
 	for _, number := range numbers {
-		info := m.getAccrualInfo(number)
-		if info != nil {
-			err := m.storage.UpdateOrderAccrual(context.Background(), number, info)
+		info, err := m.getAccrualInfo(number)
+		if err != nil {
+			logger.Error("cannot update accrual for number %s: %s", number, err)
+			continue
+		}
+
+		if info.Status != registeredStatus {
+			err := m.storage.UpdateOrderAccrual(ctx, number, info)
 			if err != nil {
 				logger.Error("cannot update accrual for number %s: %s", number, err)
 			}
@@ -73,7 +80,7 @@ func (m *accrualChecker) checkOrders() {
 	}
 }
 
-func (m *accrualChecker) getAccrualInfo(number string) *models.AccrualDTO {
+func (m *accrualChecker) getAccrualInfo(number string) (*models.AccrualDTO, error) {
 
 	dto := &models.AccrualDTO{}
 
@@ -82,14 +89,12 @@ func (m *accrualChecker) getAccrualInfo(number string) *models.AccrualDTO {
 		Get(m.createURL(number))
 
 	if err != nil {
-		logger.Error("cannot get accrual for number %s: %s", number, err)
-		return nil
+		return nil, fmt.Errorf("cannot get accrual for number %s: %w", number, err)
 	}
 
-	//Если код 200 и статус не REGISTERED, возвращаем инфу
-	if resp.StatusCode() == http.StatusOK && dto.Status != registeredStatus {
-		return dto
+	if resp.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("bad status code: %d", resp.StatusCode())
 	}
 
-	return nil
+	return dto, nil
 }

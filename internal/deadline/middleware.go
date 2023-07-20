@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	contextTimeOut = 100500 * time.Second
+	contextTimeOut = 2 * time.Second
 )
 
 // Хотим установить deadline для контекста, если его нет
